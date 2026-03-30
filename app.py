@@ -4,6 +4,19 @@ import shutil
 import time
 from core import convert_pdf_to_images, convert_images_to_pdf
 from downloader import get_video_info, download_media
+import subprocess
+
+@st.cache_resource
+def start_telegram_bot():
+    print("⚙️ Memulai proses Bot Telegram di background...")
+    # Menjalankan bot.py sebagai subprocess terpisah
+    process = subprocess.Popen(["python", "bot.py"])
+    return process
+
+try:
+    start_telegram_bot()
+except Exception as e:
+    st.error(f"Gagal menyalakan bot: {e}")
 
 st.set_page_config(page_title="Nyoto Studio", page_icon="🎨", layout="wide")
 

@@ -2,7 +2,20 @@ import streamlit as st
 import os
 import shutil
 import time
-from core import convert_pdf_to_images, convert_images_to_pdf
+from core import (
+    convert_pdf_to_images,
+    convert_images_to_pdf,
+    word_to_pdf,
+    pdf_to_word,
+    excel_to_pdf,
+    pdf_to_excel,
+    ppt_to_pdf,
+    pdf_to_ppt,
+    compress_pdf,
+    split_pdf,
+    merge_pdfs,
+    _ensure_dir
+)
 from downloader import get_video_info, download_media
 
 st.set_page_config(page_title="Nyoto Studio", page_icon="🎨", layout="wide")
@@ -190,5 +203,75 @@ with tab3:
                             )
                     except Exception as e:
                         st.error(f"Gagal mengunduh: {str(e)}")
+with st.expander('📄 Office & PDF Utility (Word/Excel/PPT <-> PDF, split/merge/compress)', expanded=False):
+    operation = st.selectbox('Pilih operasi', [
+        'word_to_pdf', 'pdf_to_word', 'excel_to_pdf', 'pdf_to_excel',
+        'ppt_to_pdf', 'pdf_to_ppt', 'compress_pdf', 'split_pdf', 'merge_pdf'
+    ])
 
+    if operation == 'merge_pdf':
+        uploaded_files = st.file_uploader('Unggah beberapa file PDF (minimal 2)', type=['pdf'], accept_multiple_files=True)
+    else:
+        uploaded_file = st.file_uploader('Unggah file input', type=['docx','pdf','xlsx','pptx'], accept_multiple_files=False)
+
+    if operation == 'merge_pdf' and uploaded_files:
+        if len(uploaded_files) < 2:
+            st.warning('Minimal 2 file PDF untuk merge.')
+        else:
+            paths = []
+            _ensure_dir('tmp/uploads')
+            for f in uploaded_files:
+                path = os.path.join('tmp/uploads', f.name)
+                with open(path, 'wb') as out:
+                    out.write(f.getbuffer())
+                paths.append(path)
+
+            output_path = os.path.join('tmp/outputs', f'merged_{int(time.time())}.pdf')
+            result = merge_pdfs(paths, output_path)
+            st.success('✅ Merge berhasil')
+            with open(result, 'rb') as out:
+                st.download_button('⬇️ Unduh hasil merge', out, file_name=os.path.basename(result), mime='application/pdf')
+
+    elif operation != 'merge_pdf' and uploaded_file:
+        _ensure_dir('tmp/uploads')
+        in_path = os.path.join('tmp/uploads', uploaded_file.name)
+        with open(in_path, 'wb') as out:
+            out.write(uploaded_file.getbuffer())
+
+        output_dir = 'tmp/outputs'
+        _ensure_dir(output_dir)
+
+        try:
+            if operation == 'word_to_pdf':
+                out_path = word_to_pdf(in_path, output_dir)
+            elif operation == 'pdf_to_word':
+                out_path = pdf_to_word(in_path, output_dir)
+            elif operation == 'excel_to_pdf':
+                out_path = excel_to_pdf(in_path, output_dir)
+            elif operation == 'pdf_to_excel':
+                out_path = pdf_to_excel(in_path, output_dir)
+            elif operation == 'ppt_to_pdf':
+                out_path = ppt_to_pdf(in_path, output_dir)
+            elif operation == 'pdf_to_ppt':
+                out_path = pdf_to_ppt(in_path, output_dir)
+            elif operation == 'compress_pdf':
+                out_path = os.path.join(output_dir, f'compressed_{os.path.basename(in_path)}')
+                compress_pdf(in_path, out_path)
+            elif operation == 'split_pdf':
+                split_paths = split_pdf(in_path, output_dir)
+                archive_path = shutil.make_archive(os.path.splitext(os.path.join(output_dir, f'split_{int(time.time())}'))[0], 'zip', output_dir)
+                st.success(f'✅ Split berhasil ({len(split_paths)} halaman)')
+                with open(archive_path, 'rb') as out:
+                    st.download_button('⬇️ Unduh ZIP hasil split', out, file_name=os.path.basename(archive_path), mime='application/zip')
+                out_path = None
+            else:
+                out_path = None
+
+            if out_path:
+                st.success('✅ Operasi selesai')
+                with open(out_path, 'rb') as out_file:
+                    st.download_button('⬇️ Unduh hasil', out_file, file_name=os.path.basename(out_path), mime='application/octet-stream')
+
+        except Exception as e:
+            st.error(f'❌ Gagal: {e}')
 st.markdown("<br><br><p style='text-align: center; color: #999; font-size: 0.9em;'>🤖 Bot & Website Terintegrasi &bull; Support: SeaBank / 901067312394 (Afgani)</p>", unsafe_allow_html=True)

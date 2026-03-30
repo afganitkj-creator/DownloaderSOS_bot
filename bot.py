@@ -5,7 +5,19 @@ import re
 from dotenv import load_dotenv
 from telegram import Update, InputMediaPhoto, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQueryHandler, filters, ContextTypes
-from core import convert_pdf_to_images, convert_images_to_pdf
+from core import (
+    convert_pdf_to_images,
+    convert_images_to_pdf,
+    word_to_pdf,
+    pdf_to_word,
+    excel_to_pdf,
+    pdf_to_excel,
+    ppt_to_pdf,
+    pdf_to_ppt,
+    compress_pdf,
+    split_pdf,
+    merge_pdfs
+)
 from downloader import get_video_info, download_media
 
 load_dotenv()
@@ -47,6 +59,55 @@ async def pdftopng_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data['action'] = 'pdftopng'
     await update.message.reply_text('📄 Kirim file PDF untuk diubah menjadi kumpulan gambar PNG.')
 
+async def word_to_pdf_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    context.user_data['action'] = 'word_to_pdf'
+    await update.message.reply_text('📄 Kirim file DOCX untuk dikonversi menjadi PDF.')
+
+async def pdf_to_word_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    context.user_data['action'] = 'pdf_to_word'
+    await update.message.reply_text('📄 Kirim file PDF untuk dikonversi menjadi DOCX.')
+
+async def excel_to_pdf_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    context.user_data['action'] = 'excel_to_pdf'
+    await update.message.reply_text('📄 Kirim file XLSX untuk dikonversi menjadi PDF.')
+
+async def pdf_to_excel_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    context.user_data['action'] = 'pdf_to_excel'
+    await update.message.reply_text('📄 Kirim file PDF untuk dikonversi menjadi XLSX.')
+
+async def ppt_to_pdf_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    context.user_data['action'] = 'ppt_to_pdf'
+    await update.message.reply_text('📄 Kirim file PPTX untuk dikonversi menjadi PDF.')
+
+async def pdf_to_ppt_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    context.user_data['action'] = 'pdf_to_ppt'
+    await update.message.reply_text('📄 Kirim file PDF untuk dikonversi menjadi PPTX.')
+
+async def compress_pdf_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    context.user_data['action'] = 'compress_pdf'
+    await update.message.reply_text('📄 Kirim file PDF yang ingin dikompres.')
+
+async def split_pdf_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    context.user_data['action'] = 'split_pdf'
+    await update.message.reply_text('📄 Kirim file PDF yang ingin dipecah per halaman.')
+
+async def merge_pdf_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    context.user_data['action'] = 'merge_pdf'
+    context.user_data['merge_files'] = []
+    await update.message.reply_text('📄 Kirim beberapa file PDF (1 per pesan), lalu kirim /merge_go setelah selesai.')
+
+async def merge_pdf_go_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    files = context.user_data.get('merge_files', [])
+    if len(files) < 2:
+        await update.message.reply_text('❌ Perlu minimal 2 file PDF untuk merge.')
+        return
+    output_path = os.path.join('tmp/bot_outputs', f'merged_{int(time.time())}.pdf')
+    result = merge_pdfs(files, output_path)
+    with open(result, 'rb') as f:
+        await update.message.reply_document(document=f, filename=os.path.basename(result))
+    context.user_data.pop('merge_files', None)
+    context.user_data.pop('action', None)
+
 async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     action = context.user_data.get('action')
     if action != 'jpgtopdf':
@@ -74,40 +135,90 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE):
     action = context.user_data.get('action')
-    if action not in ['pdftojpg', 'pdftopng']:
-        return
-        
     doc = update.message.document
-    if doc.mime_type != 'application/pdf':
-        await update.message.reply_text("❌ Harap kirim file PDF.")
+    if not doc:
         return
-        
-    loading_msg = await update.message.reply_text('⏳ Sedang mengekstrak halaman PDF menjadi gambar tanpa distorsi, mohon tunggu...')
-    
+
     file = await context.bot.get_file(doc.file_id)
-    pdf_path = os.path.join("tmp/bot_uploads", f"{doc.file_id}.pdf")
-    await file.download_to_drive(pdf_path)
-    
-    out_dir = os.path.join("tmp/bot_outputs", f"extracted_{doc.file_id}")
-    fmt = "jpg" if action == "pdftojpg" else "png"
-    
+    input_path = os.path.join("tmp/bot_uploads", f"{doc.file_id}_{doc.file_name}")
+    os.makedirs("tmp/bot_uploads", exist_ok=True)
+    await file.download_to_drive(input_path)
+
+    out_dir = os.path.join("tmp/bot_outputs")
+    os.makedirs(out_dir, exist_ok=True)
+
     try:
-        image_paths = convert_pdf_to_images(pdf_path, out_dir, format=fmt)
-        await context.bot.delete_message(chat_id=update.effective_chat.id, message_id=loading_msg.message_id)
-        
-        if not image_paths:
-            await update.message.reply_text("❌ Tidak ada gambar yang berhasil diekstrak.")
-            return
-            
-        # Kirim secara massal sebagai album Telegram (maks 10 per pesan)
-        for i in range(0, len(image_paths), 10):
-            chunk = image_paths[i:i+10]
-            media_group = [InputMediaPhoto(media=open(img, 'rb')) for img in chunk]
-            await update.message.reply_media_group(media=media_group)
-            
-        context.user_data.pop('action', None)
+        if action in ['pdftojpg', 'pdftopng']:
+            if doc.mime_type != 'application/pdf':
+                await update.message.reply_text("❌ Harap kirim file PDF.")
+                return
+            await update.message.reply_text('⏳ Sedang mengekstrak halaman PDF menjadi gambar...')
+            fmt = 'jpg' if action == 'pdftojpg' else 'png'
+            image_paths = convert_pdf_to_images(input_path, os.path.join(out_dir, f"extracted_{doc.file_id}"), format=fmt)
+
+            for i in range(0, len(image_paths), 10):
+                chunk = image_paths[i:i+10]
+                media_group = [InputMediaPhoto(media=open(img, 'rb')) for img in chunk]
+                await update.message.reply_media_group(media=media_group)
+
+            context.user_data.pop('action', None)
+
+        elif action == 'word_to_pdf':
+            output_path = word_to_pdf(input_path, out_dir)
+            await update.message.reply_document(document=open(output_path, 'rb'), filename=os.path.basename(output_path))
+            context.user_data.pop('action', None)
+
+        elif action == 'pdf_to_word':
+            output_path = pdf_to_word(input_path, out_dir)
+            await update.message.reply_document(document=open(output_path, 'rb'), filename=os.path.basename(output_path))
+            context.user_data.pop('action', None)
+
+        elif action == 'excel_to_pdf':
+            output_path = excel_to_pdf(input_path, out_dir)
+            await update.message.reply_document(document=open(output_path, 'rb'), filename=os.path.basename(output_path))
+            context.user_data.pop('action', None)
+
+        elif action == 'pdf_to_excel':
+            output_path = pdf_to_excel(input_path, out_dir)
+            await update.message.reply_document(document=open(output_path, 'rb'), filename=os.path.basename(output_path))
+            context.user_data.pop('action', None)
+
+        elif action == 'ppt_to_pdf':
+            output_path = ppt_to_pdf(input_path, out_dir)
+            await update.message.reply_document(document=open(output_path, 'rb'), filename=os.path.basename(output_path))
+            context.user_data.pop('action', None)
+
+        elif action == 'pdf_to_ppt':
+            output_path = pdf_to_ppt(input_path, out_dir)
+            await update.message.reply_document(document=open(output_path, 'rb'), filename=os.path.basename(output_path))
+            context.user_data.pop('action', None)
+
+        elif action == 'compress_pdf':
+            output_path = os.path.join(out_dir, f"compressed_{os.path.basename(input_path)}")
+            compress_pdf(input_path, output_path)
+            await update.message.reply_document(document=open(output_path, 'rb'), filename=os.path.basename(output_path))
+            context.user_data.pop('action', None)
+
+        elif action == 'split_pdf':
+            split_paths = split_pdf(input_path, out_dir)
+            zip_path = shutil.make_archive(os.path.splitext(os.path.join(out_dir, f'split_{int(time.time())}'))[0], 'zip', out_dir)
+            await update.message.reply_document(document=open(zip_path, 'rb'), filename=os.path.basename(zip_path))
+            context.user_data.pop('action', None)
+
+        elif action == 'merge_pdf':
+            merge_list = context.user_data.setdefault('merge_files', [])
+            if doc.mime_type != 'application/pdf':
+                await update.message.reply_text("❌ File harus PDF untuk merge.")
+                return
+            merge_list.append(input_path)
+            await update.message.reply_text(f"✅ PDF ditambahkan ({len(merge_list)}) - kirim /merge_go saat siap.")
+
+        else:
+            # Jika tidak ada action yang dikenali, proses default tetap pdftojpg/png
+            await update.message.reply_text("⚠️ Aksi tidak dikenali. Gunakan perintah yang tersedia.")
+
     except Exception as e:
-        await update.message.reply_text(f"❌ Gagal merender PDF: {str(e)}")
+        await update.message.reply_text(f"❌ Gagal memproses dokumen: {str(e)}")
 
 async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = update.message.text or ""
@@ -189,6 +300,16 @@ async def post_init(application: Application):
         ("jpgtopdf", "Kirim foto -> dapat file PDF"),
         ("pdftojpg", "Kirim PDF -> dapat gambar JPG"),
         ("pdftopng", "Kirim PDF -> dapat gambar PNG"),
+        ("word_to_pdf", "DOCX -> PDF"),
+        ("pdf_to_word", "PDF -> DOCX"),
+        ("excel_to_pdf", "XLSX -> PDF"),
+        ("pdf_to_excel", "PDF -> XLSX"),
+        ("ppt_to_pdf", "PPTX -> PDF"),
+        ("pdf_to_ppt", "PDF -> PPTX"),
+        ("compress_pdf", "Kompres PDF"),
+        ("split_pdf", "Split PDF"),
+        ("merge_pdf", "Kumpulkan beberapa PDF"),
+        ("merge_go", "Selesaikan merge PDF"),
         ("kopi", "Dukungan & Donasi")
     ])
 
@@ -200,6 +321,17 @@ def main():
     app.add_handler(CommandHandler("jpgtopdf", jpgtopdf_cmd))
     app.add_handler(CommandHandler("pdftojpg", pdftojpg_cmd))
     app.add_handler(CommandHandler("pdftopng", pdftopng_cmd))
+
+    app.add_handler(CommandHandler("word_to_pdf", word_to_pdf_cmd))
+    app.add_handler(CommandHandler("pdf_to_word", pdf_to_word_cmd))
+    app.add_handler(CommandHandler("excel_to_pdf", excel_to_pdf_cmd))
+    app.add_handler(CommandHandler("pdf_to_excel", pdf_to_excel_cmd))
+    app.add_handler(CommandHandler("ppt_to_pdf", ppt_to_pdf_cmd))
+    app.add_handler(CommandHandler("pdf_to_ppt", pdf_to_ppt_cmd))
+    app.add_handler(CommandHandler("compress_pdf", compress_pdf_cmd))
+    app.add_handler(CommandHandler("split_pdf", split_pdf_cmd))
+    app.add_handler(CommandHandler("merge_pdf", merge_pdf_cmd))
+    app.add_handler(CommandHandler("merge_go", merge_pdf_go_cmd))
     
     app.add_handler(MessageHandler(filters.PHOTO, handle_photo))
     app.add_handler(MessageHandler(filters.Document.ALL, handle_document))

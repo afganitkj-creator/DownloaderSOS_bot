@@ -1,4 +1,10 @@
-import yt_dlp
+try:
+    import yt_dlp
+except ModuleNotFoundError as exc:
+    raise ModuleNotFoundError(
+        "Package 'yt-dlp' tidak ditemukan. Jalankan 'pip install yt-dlp' atau 'pip install -r requirements.txt'."
+    ) from exc
+
 import os
 import time
 import requests

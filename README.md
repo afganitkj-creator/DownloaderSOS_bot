@@ -16,8 +16,16 @@ Anda dapat mengakses fitur bot melalui menu berikut:
 | `/start` | Menampilkan pesan sambutan dan daftar semua fitur bot. |
 | `/jpg_to_pdf` | Konversi satu atau beberapa foto menjadi satu file PDF. |
 | `/pdf_to_jpg` | Ekstrak halaman PDF menjadi file gambar berformat JPG. |
-| `/pdf_to_png` | Ekstrak halaman PDF menjadi file gambar berformat PNG. |
-| `/kopi` | Informasi dukungan/donasi pengembang. |
+| `/pdf_to_png` | Ekstrak halaman PDF menjadi file gambar berformat PNG. || /word_to_pdf | Konversi DOCX ke PDF. |
+| /pdf_to_word | Konversi PDF ke DOCX. |
+| /excel_to_pdf | Konversi XLSX ke PDF. |
+| /pdf_to_excel | Konversi PDF ke XLSX. |
+| /ppt_to_pdf | Konversi PPTX ke PDF. |
+| /pdf_to_ppt | Konversi PDF ke PPTX. |
+| /compress_pdf | Kompres ukuran PDF. |
+| /split_pdf | Pecah PDF menjadi halaman terpisah. |
+| /merge_pdf | Tambah beberapa PDF untuk digabung. |
+| /merge_go | Proses dan unduh PDF gabungan. || `/kopi` | Informasi dukungan/donasi pengembang. |
 
 ## 🚀 Cara Penggunaan
 1. Buka bot dan ketik/pilih perintah yang diinginkan (contoh: `/pdf_to_jpg`).

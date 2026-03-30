@@ -200,8 +200,20 @@ async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         elif action == 'compress_pdf':
             output_path = os.path.join(out_dir, f"compressed_{os.path.basename(input_path)}")
+            input_size = os.path.getsize(input_path)
             compress_pdf(input_path, output_path)
-            await update.message.reply_document(document=open(output_path, 'rb'), filename=os.path.basename(output_path))
+            output_size = os.path.getsize(output_path)
+            reduction = (1 - output_size / input_size) * 100 if input_size > 0 else 0
+            
+            # Send info message with compression stats
+            size_before = f"{input_size / 1024 / 1024:.2f} MB" if input_size > 1024*1024 else f"{input_size / 1024:.2f} KB"
+            size_after = f"{output_size / 1024 / 1024:.2f} MB" if output_size > 1024*1024 else f"{output_size / 1024:.2f} KB"
+            info_msg = f"📊 *Kompresi PDF Selesai*\n📥 Ukuran awal: {size_before}\n📤 Ukuran akhir: {size_after}\n✂️ Pengurangan: {reduction:.1f}%"
+            await update.message.reply_text(info_msg, parse_mode='Markdown')
+            
+            # Send compressed file
+            with open(output_path, 'rb') as f:
+                await update.message.reply_document(document=f, filename=os.path.basename(output_path))
             context.user_data.pop('action', None)
 
         elif action == 'split_pdf':

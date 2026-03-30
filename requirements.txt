@@ -8,3 +8,5 @@ yt-dlp
 pypandoc
 pdf2docx
 requests
+reportlab
+pypandoc-binary

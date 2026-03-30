@@ -2,6 +2,7 @@ import fitz  # PyMuPDF
 import os
 import shutil
 import subprocess
+import logging
 from PIL import Image
 from pypdf import PdfReader, PdfWriter
 
@@ -171,6 +172,13 @@ def pdf_to_ppt(pdf_path: str, output_dir: str = 'tmp/outputs') -> str:
 
 
 def compress_pdf(input_pdf: str, output_pdf: str) -> str:
+    """Kompresi PDF dengan berbagai metode fallback untuk hasil optimal."""
+    _ensure_dir(os.path.dirname(output_pdf) or 'tmp/outputs')
+    
+    # Cek ukuran file input
+    input_size = os.path.getsize(input_pdf)
+    
+    # Method 1: Coba iLovePDF API (cloud-based kompresi)
     try:
         result = compress_pdf_ilovepdf(input_pdf, output_dir=os.path.dirname(output_pdf) or 'tmp/outputs')
         if result.endswith('.zip'):
@@ -181,37 +189,106 @@ def compress_pdf(input_pdf: str, output_pdf: str) -> str:
                 if members:
                     extracted = os.path.join(os.path.dirname(output_pdf) or 'tmp/outputs', members[0])
                     os.replace(extracted, output_pdf)
-                    return output_pdf
-        elif os.path.exists(result):
+                    if os.path.exists(output_pdf):
+                        return output_pdf
+        elif os.path.exists(result) and os.path.getsize(result) < input_size:
             os.replace(result, output_pdf)
             return output_pdf
-    except Exception:
+    except Exception as e:
+        logging.debug(f"iLovePDF compression failed: {e}")
         pass
 
-    if shutil.which('gs'):
+    # Method 2: Gunakan Ghostscript untuk kompresi agresif
+    gs_bin = shutil.which('gs')
+    if gs_bin:
+        # Coba beberapa level kompresi Ghostscript
+        gs_settings = [
+            '/screen',    # Maximum compression (72 dpi, suitable for screen)
+            '/ebook',     # Medium compression (150 dpi, suitable for e-reading)
+            '/printer',   # Good quality (300 dpi, suitable for printing)
+        ]
+        
+        for quality_setting in gs_settings:
+            temp_output = output_pdf + '.gs_temp'
+            cmd = [
+                gs_bin,
+                '-sDEVICE=pdfwrite',
+                '-dCompatibilityLevel=1.4',
+                f'-dPDFSETTINGS={quality_setting}',
+                '-dNOPAUSE',
+                '-dQUIET',
+                '-dBATCH',
+                '-dDetectDuplicateImages',
+                '-r150x150',
+                f'-sOutputFile={temp_output}',
+                input_pdf
+            ]
+            
+            try:
+                result = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
+                if result.returncode == 0 and os.path.exists(temp_output):
+                    temp_size = os.path.getsize(temp_output)
+                    # Gunakan hasil jika lebih kecil dari input
+                    if temp_size < input_size:
+                        os.replace(temp_output, output_pdf)
+                        compression_ratio = (1 - temp_size / input_size) * 100
+                        logging.info(f"PDF compressed with GS '{quality_setting}': {input_size} → {temp_size} bytes ({compression_ratio:.1f}% reduction)")
+                        return output_pdf
+                    else:
+                        # Coba quality setting berikutnya
+                        if os.path.exists(temp_output):
+                            os.remove(temp_output)
+                        continue
+            except (subprocess.TimeoutExpired, Exception) as e:
+                if os.path.exists(temp_output):
+                    os.remove(temp_output)
+                logging.debug(f"GS compression with '{quality_setting}' failed: {e}")
+                continue
+        
+        # Jika tidak ada setting yang sukses, gunakan yang paling agresif
         cmd = [
-            'gs',
+            gs_bin,
             '-sDEVICE=pdfwrite',
             '-dCompatibilityLevel=1.4',
-            '-dPDFSETTINGS=/ebook',
+            '-dPDFSETTINGS=/screen',
             '-dNOPAUSE',
             '-dQUIET',
             '-dBATCH',
             '-sOutputFile=' + output_pdf,
             input_pdf
         ]
-        result = subprocess.run(cmd, capture_output=True, text=True)
-        if result.returncode != 0:
-            raise RuntimeError(f"Ghostscript compress PDF error: {result.stderr.strip()}")
-        return output_pdf
+        try:
+            result = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
+            if result.returncode == 0 and os.path.exists(output_pdf):
+                return output_pdf
+        except Exception as e:
+            logging.warning(f"Final GS compression attempt failed: {e}")
 
-    # fallback tanpa gs: export ulang dengan pypdf
-    reader = PdfReader(input_pdf)
-    writer = PdfWriter()
-    for p in reader.pages:
-        writer.add_page(p)
-    with open(output_pdf, 'wb') as f:
-        writer.write(f)
+    # Method 3: Fallback pypdf dengan image compression
+    try:
+        reader = PdfReader(input_pdf)
+        writer = PdfWriter()
+        for page in reader.pages:
+            page.compress_content_streams()
+            writer.add_page(page)
+        
+        with open(output_pdf, 'wb') as f:
+            writer.write(f)
+        
+        if os.path.exists(output_pdf):
+            output_size = os.path.getsize(output_pdf)
+            if output_size < input_size:
+                compression_ratio = (1 - output_size / input_size) * 100
+                logging.info(f"PDF compressed with pypdf: {input_size} → {output_size} bytes ({compression_ratio:.1f}% reduction)")
+                return output_pdf
+    except Exception as e:
+        logging.warning(f"pypdf compression failed: {e}")
+
+    # Method 4: Last resort - Simple copy if no compression possible
+    if not os.path.exists(output_pdf):
+        shutil.copy2(input_pdf, output_pdf)
+        logging.warning("No compression possible, file copied as-is")
+    
     return output_pdf
 
 

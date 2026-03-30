@@ -60,6 +60,8 @@ bot.on(message('photo'), async (ctx) => {
   if (action !== 'jpgtopdf') return;
 
   try {
+    const loadingMsg = await ctx.reply('⏳ Sedang memproses menjadi PDF, mohon tunggu...');
+
     // Ambil semua foto (media group atau single)
     let photoFiles = ctx.message.photo;
     if (ctx.message.media_group_id) {
@@ -70,6 +72,8 @@ bot.on(message('photo'), async (ctx) => {
     const largestPhoto = photoFiles.pop(); // foto resolusi tertinggi
     const fileLink = await ctx.telegram.getFileLink(largestPhoto!.file_id);
     const pdfBuffer = await convertImagesToPdf([fileLink.toString()]);
+    
+    await ctx.telegram.deleteMessage(ctx.chat.id, loadingMsg.message_id).catch(() => {});
     await ctx.replyWithDocument({ source: pdfBuffer, filename: 'output.pdf' });
     delete ctx.session.action;
   } catch (err: any) {
@@ -90,14 +94,31 @@ bot.on(message('document'), async (ctx) => {
   }
 
   try {
-    const format = action === 'pdf_to_jpg' ? 'jpg' : 'png';
+    const loadingMsg = await ctx.reply('⏳ Sedang mengekstrak gambar dari PDF, mohon tunggu...');
+    
+    const format = action === 'pdftojpg' ? 'jpg' : 'png';
     const fileLink = await ctx.telegram.getFileLink(doc.file_id);
-    const zipBuffer = await convertPdfToImages(fileLink.toString(), format);
-    await ctx.replyWithDocument({ source: zipBuffer, filename: `output_${format}.zip` });
+    const imageBuffers: Buffer[] = await convertPdfToImages(fileLink.toString(), format);
+    
+    await ctx.telegram.deleteMessage(ctx.chat.id, loadingMsg.message_id).catch(() => {});
+
+    if (imageBuffers.length === 0) {
+      return ctx.reply('❌ Tidak ada gambar yang berhasil diekstrak.');
+    }
+
+    // Mengirim gambar sebagai album (max 10 per grup)
+    for (let i = 0; i < imageBuffers.length; i += 10) {
+      const chunk = imageBuffers.slice(i, i + 10);
+      const mediaGroup = chunk.map((buf: Buffer) => ({
+        type: 'photo' as const,
+        media: { source: buf }
+      }));
+      await ctx.replyWithMediaGroup(mediaGroup);
+    }
     delete ctx.session.action;
   } catch (err: any) {
     logger.error(err);
-    ctx.reply(`❌ Gagal konversi PDF ke gambar: ${err.message}\n\nCatatan: Fitur ini membutuhkan poppler-utils dan tidak berfungsi di Vercel. Deploy ke Railway/Render untuk dukungan penuh.`);
+    ctx.reply(`❌ Gagal konversi PDF ke gambar: ${err.message}`);
     delete ctx.session.action;
   }
 });
@@ -118,6 +139,16 @@ export const webhookHandler = async (req: any, res: any) => {
 if (process.env.VERCEL !== '1' && process.env.NODE_ENV !== 'production') {
   bot.telegram.deleteWebhook().then(() => {
     logger.info('🗑️ Webhook dihapus (beralih ke polling).');
+    
+    // Register commands for autocomplete UI
+    bot.telegram.setMyCommands([
+      { command: 'start', description: 'Tampilkan pesan bantuan' },
+      { command: 'jpgtopdf', description: 'Kirim foto -> dapat file PDF' },
+      { command: 'pdftojpg', description: 'Kirim PDF -> dapat gambar JPG' },
+      { command: 'pdftopng', description: 'Kirim PDF -> dapat gambar PNG' },
+      { command: 'kopi', description: 'Dukungan & Donasi' }
+    ]).catch(err => logger.error('Failed to set commands', err));
+
     bot.launch().then(() => logger.info('🤖 Bot Nyoto sedang berjalan secara lokal...'));
   });
   

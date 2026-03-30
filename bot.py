@@ -2,6 +2,7 @@ import os
 import shutil
 import time
 import re
+import logging
 from dotenv import load_dotenv
 from telegram import Update, InputMediaPhoto, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQueryHandler, filters, ContextTypes
@@ -20,17 +21,21 @@ from core import (
 )
 from downloader import get_video_info, download_media
 
+logging.basicConfig(level=logging.INFO, format='%(asctime)s [%(levelname)s] %(message)s')
 load_dotenv()
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 
 if not BOT_TOKEN:
     raise ValueError("Token bot tidak ditemukan di .env!")
 
+logging.info(f"Memuat token bot: {BOT_TOKEN[:10]}***")
+
 # Folder temporary untuk bot khusus
 os.makedirs("tmp/bot_uploads", exist_ok=True)
 os.makedirs("tmp/bot_outputs", exist_ok=True)
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    logging.info(f"/start diterima dari user {update.effective_user.id} ({update.effective_user.username})")
     text = (
         "🤖 *Nyoto Bot (Python Edition)*\n"
         "Perintah yang tersedia:\n"

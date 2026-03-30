@@ -5,3 +5,6 @@ Pillow
 python-dotenv
 pypdf
 yt-dlp
+pypandoc
+pdf2docx
+requests

@@ -204,6 +204,7 @@ with tab3:
                     except Exception as e:
                         st.error(f"Gagal mengunduh: {str(e)}")
 with st.expander('📄 Office & PDF Utility (Word/Excel/PPT <-> PDF, split/merge/compress)', expanded=False):
+    st.info("💡 Untuk fitur konversi dokumen, pastikan API key iLovePDF diatur di .env (ILOVEPDF_PUBLIC_KEY dan ILOVEPDF_SECRET_KEY). Jika tidak, akan menggunakan fallback lokal.")
     operation = st.selectbox('Pilih operasi', [
         'word_to_pdf', 'pdf_to_word', 'excel_to_pdf', 'pdf_to_excel',
         'ppt_to_pdf', 'pdf_to_ppt', 'compress_pdf', 'split_pdf', 'merge_pdf'

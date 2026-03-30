@@ -1,6 +1,10 @@
 import streamlit as st
+
+st.set_page_config(page_title="Nyoto Studio", page_icon="🎨", layout="wide")
+
 import os
 import shutil
+import subprocess
 import time
 from core import (
     convert_pdf_to_images,
@@ -18,7 +22,35 @@ from core import (
 )
 from downloader import get_video_info, download_media
 
-st.set_page_config(page_title="Nyoto Studio", page_icon="🎨", layout="wide")
+@st.cache_resource
+def start_telegram_bot():
+    token = os.getenv("BOT_TOKEN")
+    if not token:
+        try:
+            token = st.secrets.get("BOT_TOKEN")
+        except Exception:
+            token = None
+            
+    if not token:
+        return None, "⚠️ BOT_TOKEN tidak ditemukan di Environment/Secrets. Harap tambahkan di pengaturan."
+
+    print("⚙️ Memulai proses Bot Telegram di background...")
+    python_cmd = "python3" if shutil.which("python3") else "python"
+    process = subprocess.Popen([python_cmd, "bot.py"], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    return process, "✅ Bot Telegram berhasil dinyalakan di latar belakang!"
+
+bot_process, bot_status_msg = start_telegram_bot()
+
+if "⚠️" in bot_status_msg:
+    st.error(bot_status_msg)
+else:
+    time.sleep(1)
+    if bot_process and bot_process.poll() is not None:
+        err_msg = bot_process.stderr.read().decode('utf-8')
+        st.error(f"❌ Bot gagal menyala dengan error: {err_msg}")
+    else:
+        st.success(bot_status_msg)
+
 
 st.markdown("""
 <style>

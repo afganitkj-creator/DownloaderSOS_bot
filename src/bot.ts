@@ -25,9 +25,9 @@ bot.command('start', (ctx) => {
 🤖 *Nyoto Bot*  
 Perintah yang tersedia:  
 /start - Tampilkan pesan ini  
-/jpg_to_pdf - Kirim foto → dapat file PDF  
-/pdf_to_jpg - Kirim PDF → dapat gambar JPG (dalam ZIP)  
-/pdf_to_png - Kirim PDF → dapat gambar PNG (dalam ZIP)  
+/jpgtopdf - Kirim foto → dapat file PDF  
+/pdftojpg - Kirim PDF → dapat gambar JPG (dalam ZIP)  
+/pdftopng - Kirim PDF → dapat gambar PNG (dalam ZIP)  
 /kopi - Info donasi  
 
 📌 *Catatan*: Fitur PDF → Gambar hanya berfungsi jika environment mendukung poppler-utils (tidak berfungsi di Vercel).  
@@ -39,25 +39,25 @@ bot.command('kopi', (ctx) => {
 });
 
 // Perintah konversi
-bot.command('jpg_to_pdf', (ctx) => {
-  ctx.session = { action: 'jpg_to_pdf' };
+bot.command('jpgtopdf', (ctx) => {
+  ctx.session = { action: 'jpgtopdf' };
   ctx.reply('📸 Kirim satu atau beberapa foto (media group) yang ingin dijadikan PDF.');
 });
 
-bot.command('pdf_to_jpg', (ctx) => {
-  ctx.session = { action: 'pdf_to_jpg' };
+bot.command('pdftojpg', (ctx) => {
+  ctx.session = { action: 'pdftojpg' };
   ctx.reply('📄 Kirim file PDF untuk diubah menjadi gambar JPG (dikemas dalam ZIP).');
 });
 
-bot.command('pdf_to_png', (ctx) => {
-  ctx.session = { action: 'pdf_to_png' };
+bot.command('pdftopng', (ctx) => {
+  ctx.session = { action: 'pdftopng' };
   ctx.reply('📄 Kirim file PDF untuk diubah menjadi gambar PNG (dikemas dalam ZIP).');
 });
 
-// Handler foto (untuk jpg_to_pdf)
+// Handler foto (untuk jpgtopdf)
 bot.on(message('photo'), async (ctx) => {
   const action = ctx.session?.action;
-  if (action !== 'jpg_to_pdf') return;
+  if (action !== 'jpgtopdf') return;
 
   try {
     // Ambil semua foto (media group atau single)
@@ -85,7 +85,7 @@ bot.on(message('document'), async (ctx) => {
   if (!action || !action.startsWith('pdf_to_')) return;
 
   const doc = ctx.message.document;
-  if (!doc.mimeType?.includes('pdf')) {
+  if (!doc.mime_type?.includes('pdf')) {
     return ctx.reply('❌ Harap kirim file PDF.');
   }
 
@@ -113,3 +113,14 @@ bot.on('text', (ctx) => {
 export const webhookHandler = async (req: any, res: any) => {
   await bot.handleUpdate(req.body, res);
 };
+
+// Polling mode (untuk lokal)
+if (process.env.VERCEL !== '1' && process.env.NODE_ENV !== 'production') {
+  bot.telegram.deleteWebhook().then(() => {
+    logger.info('🗑️ Webhook dihapus (beralih ke polling).');
+    bot.launch().then(() => logger.info('🤖 Bot Nyoto sedang berjalan secara lokal...'));
+  });
+  
+  process.once('SIGINT', () => bot.stop('SIGINT'));
+  process.once('SIGTERM', () => bot.stop('SIGTERM'));
+}

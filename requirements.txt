@@ -1,0 +1,5 @@
+streamlit
+python-telegram-bot==21.0.1
+PyMuPDF
+Pillow
+python-dotenv

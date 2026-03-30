@@ -68,55 +68,59 @@ def _libreoffice_convert(input_path: str, output_dir: str, output_ext: str):
         cmd = [
             soffice_bin,
             '--headless',
+            '--norestore',
+            '--nofirststartwizard',
+            '--nolockcheck',
             '--convert-to', output_ext,
             '--outdir', output_dir,
             input_path
         ]
-        result = subprocess.run(cmd, capture_output=True, text=True)
-        if result.returncode != 0:
-            raise RuntimeError(f"Konversi LibreOffice gagal: {result.stderr.strip()}")
+        try:
+            result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
+            if result.returncode == 0:
+                base = os.path.splitext(os.path.basename(input_path))[0]
+                output_file = os.path.join(output_dir, f"{base}.{output_ext}")
+                if os.path.exists(output_file):
+                    return output_file
+            # If LibreOffice fails, continue to fallback
+        except (subprocess.TimeoutExpired, Exception) as e:
+            pass  # Continue to fallback
 
-        base = os.path.splitext(os.path.basename(input_path))[0]
-        return os.path.join(output_dir, f"{base}.{output_ext}")
-
-    # Fallback: tanpa LibreOffice, gunakan library Python jika tersedia
+    # Fallback: gunakan pypandoc untuk dokumen ke PDF
     ext_out = output_ext.lower()
     input_ext = os.path.splitext(input_path)[1].lstrip('.').lower()
 
     if ext_out == 'pdf' and input_ext in ('docx', 'doc'):
-        # docx2pdf tidak berjalan di Linux kecuali memiliki MS Word, jadi coba pypandoc sebagai opsi
         try:
             import pypandoc
-        except ImportError:
-            raise EnvironmentError("LibreOffice tidak ditemukan dan pypandoc belum terpasang; install LibreOffice atau pypandoc.")
-
-        output_file = os.path.join(output_dir, f"{os.path.splitext(os.path.basename(input_path))[0]}.pdf")
-        try:
+            # Ensure pandoc binary is available
+            try:
+                subprocess.run(['pandoc', '--version'], capture_output=True, check=True, timeout=5)
+            except (FileNotFoundError, subprocess.CalledProcessError):
+                # Try to download pandoc wheels
+                pypandoc.download_pandoc()
+            
+            output_file = os.path.join(output_dir, f"{os.path.splitext(os.path.basename(input_path))[0]}.pdf")
             pypandoc.convert_file(input_path, 'pdf', outputfile=output_file)
             if os.path.exists(output_file):
                 return output_file
-            raise RuntimeError('pypandoc gagal menghasilkan output file')
+            raise RuntimeError('pypandoc failed to generate output')
         except Exception as exc:
-            raise RuntimeError(f"pypandoc error: {exc}")
+            pass  # Continue to other fallbacks
 
     if ext_out == 'docx' and input_ext == 'pdf':
         try:
             from pdf2docx import Converter
-        except ImportError:
-            raise EnvironmentError("LibreOffice tidak ditemukan dan pdf2docx belum terpasang; install LibreOffice atau pdf2docx.")
-
-        output_file = os.path.join(output_dir, f"{os.path.splitext(os.path.basename(input_path))[0]}.docx")
-        try:
+            output_file = os.path.join(output_dir, f"{os.path.splitext(os.path.basename(input_path))[0]}.docx")
             cv = Converter(input_path)
             cv.convert(output_file, start=0, end=None)
             cv.close()
-            if not os.path.exists(output_file):
-                raise RuntimeError('pdf2docx gagal menghasilkan output file.')
-            return output_file
-        except Exception as exc:
-            raise RuntimeError(f"pdf2docx error: {exc}")
+            if os.path.exists(output_file):
+                return output_file
+        except Exception:
+            pass  # Continue to other options
 
-    raise EnvironmentError("LibreOffice tidak ditemukan; install 'soffice' untuk konversi dokumen.")
+    raise EnvironmentError(f"Tidak dapat mengonversi {input_ext} ke {ext_out}. Pastikan LibreOffice atau Pandoc terinstal.")
 
 
 def word_to_pdf(docx_path: str, output_dir: str = 'tmp/outputs') -> str:

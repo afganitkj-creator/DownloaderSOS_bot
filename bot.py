@@ -223,7 +223,19 @@ async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await update.message.reply_text("⚠️ Aksi tidak dikenali. Gunakan perintah yang tersedia.")
 
     except Exception as e:
-        await update.message.reply_text(f"❌ Gagal memproses dokumen: {str(e)}")
+        error_msg = str(e)
+        # Provide user-friendly error messages
+        if 'pandoc' in error_msg.lower():
+            user_msg = '❌ Gagal mengonversi: Pandoc tidak bisa dijalankan. Coba lagi.'
+        elif 'soffice' in error_msg.lower() or 'libreoffice' in error_msg.lower():
+            user_msg = '❌ Gagal mengonversi: LibreOffice tidak bisa dijalankan. Coba lagi.'
+        elif 'Tidak dapat mengonversi' in error_msg:
+            user_msg = f'❌ Gagal: {error_msg}'
+        else:
+            user_msg = f'❌ Gagal memproses dokumen: {error_msg[:100]}'
+        
+        await update.message.reply_text(user_msg)
+        logging.error(f'Error for user {update.effective_user.id}: {error_msg}', exc_info=True)
 
 async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = update.message.text or ""

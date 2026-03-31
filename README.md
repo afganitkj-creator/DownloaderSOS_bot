@@ -43,3 +43,57 @@ Jika bot ini membantu pekerjaan Anda, Anda bisa memberikan dukungan melalui:
 
 ## 📝 Lisensi
 Proyek ini dibuat untuk tujuan pembelajaran dan kemudahan akses alat digital. Silakan fork dan kembangkan lebih lanjut.
+
+---
+
+## 🚀 DEPLOYMENT (Jalankan Bot 24/7)
+
+Bot ini bisa dijalankan terus-menerus di cloud tanpa henti! Ada banyak opsi:
+
+### ⭐ **REKOMENDASI: Railway.app (Paling Mudah - GRATIS)**
+
+1. **Buka [railway.app](https://railway.app)** dan login dengan GitHub
+2. **"New Project"** → **"Deploy from GitHub Repo"**
+3. Pilih repository `DownloaderSOS_bot`
+4. Railway otomatis detect `Dockerfile`
+5. Setup environment variables di Railway Dashboard:
+   - `BOT_TOKEN`: token Telegram bot Anda
+   - `ILOVEPDF_PUBLIC_KEY` dan `ILOVEPDF_SECRET_KEY`: (opsional)
+6. Deploy! Bot jalan 24/7 ✅
+
+### Opsi Lain:
+- **Render.com**: Gratis untuk 18 jam/hari (upgrade untuk 24/7)
+- **Docker Compose**: Untuk VPS/Server sendiri
+- **GitHub Actions**: Auto-deploy setiap kali push
+
+📖 **Lihat file [DEPLOYMENT.md](DEPLOYMENT.md) untuk panduan lengkap!**
+
+---
+
+## 🐳 Docker (Lokal/Server)
+
+**Jalankan dengan Docker:**
+```bash
+docker build -t sos-bot .
+docker run -d \
+  -e BOT_TOKEN="your_token" \
+  --restart always \
+  --name sos-bot \
+  sos-bot
+```
+
+**Atau Docker Compose:**
+```bash
+# Edit .env dengan token Anda
+docker-compose up -d
+```
+
+---
+
+## 💾 Requirements
+
+- Python 3.11+
+- Telegram Bot Token
+- (Opsional) iLovePDF API keys untuk kompresi cloud
+
+Semua dependensi sudah tercantum di `requirements.txt`

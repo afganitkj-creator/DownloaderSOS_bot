@@ -1,0 +1,38 @@
+version: '3.8'
+
+services:
+  bot:
+    build: .
+    container_name: downloader-sos-bot
+    environment:
+      - BOT_TOKEN=${BOT_TOKEN}
+      - ILOVEPDF_PUBLIC_KEY=${ILOVEPDF_PUBLIC_KEY}
+      - ILOVEPDF_SECRET_KEY=${ILOVEPDF_SECRET_KEY}
+    volumes:
+      - ./tmp:/app/tmp
+    restart: always
+    networks:
+      - bot-network
+
+  streamlit:
+    build: .
+    container_name: downloader-sos-web
+    entrypoint: streamlit run app.py --server.enableCORS false --server.enableXsrfProtection false
+    environment:
+      - BOT_TOKEN=${BOT_TOKEN}
+      - ILOVEPDF_PUBLIC_KEY=${ILOVEPDF_PUBLIC_KEY}
+      - ILOVEPDF_SECRET_KEY=${ILOVEPDF_SECRET_KEY}
+    ports:
+      - "8501:8501"
+    volumes:
+      - ./tmp:/app/tmp
+      - ./app.py:/app/app.py
+      - ./core.py:/app/core.py
+    depends_on:
+      - bot
+    networks:
+      - bot-network
+
+networks:
+  bot-network:
+    driver: bridge

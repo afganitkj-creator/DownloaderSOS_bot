@@ -3,6 +3,8 @@ import shutil
 import time
 import re
 import logging
+import signal
+import sys
 from dotenv import load_dotenv
 from telegram import Update, InputMediaPhoto, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQueryHandler, filters, ContextTypes
@@ -343,6 +345,7 @@ async def post_init(application: Application):
     ])
 
 def main():
+    """Main entry point dengan graceful shutdown handling."""
     app = Application.builder().token(BOT_TOKEN).post_init(post_init).build()
     
     app.add_handler(CommandHandler("start", start))
@@ -368,7 +371,31 @@ def main():
     app.add_handler(CallbackQueryHandler(button_callback))
     
     print("🤖 Bot Telegram (Python Edition) siap melayani dan sedang melakukan polling...")
-    app.run_polling(drop_pending_updates=True)
+    print("💡 Tekan Ctrl+C untuk menghentikan bot dengan aman...")
+    
+    try:
+        # Setup graceful shutdown handler
+        def signal_handler(sig, frame):
+            logging.info("⏹️  Menerima sinyal shutdown, membersihkan resources...")
+            print("\n⏹️  Menghentikan bot...")
+            app.stop()
+            sys.exit(0)
+        
+        # Register signal handlers untuk Ctrl+C (SIGINT) dan termination (SIGTERM)
+        signal.signal(signal.SIGINT, signal_handler)
+        signal.signal(signal.SIGTERM, signal_handler)
+        
+        # Run the bot
+        app.run_polling(drop_pending_updates=True)
+        
+    except KeyboardInterrupt:
+        logging.info("🛑 Bot dihentikan oleh user")
+        print("✅ Bot berhasil dihentikan!")
+        sys.exit(0)
+    except Exception as e:
+        logging.error(f"❌ Error pada bot: {e}")
+        print(f"❌ Bot error: {e}")
+        sys.exit(1)
 
 if __name__ == '__main__':
     main()
